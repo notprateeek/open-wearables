@@ -78,3 +78,15 @@ def test_a_resync_writes_and_announces_nothing(db: Session) -> None:
         emit.assert_not_called()
 
     assert db.query(EventRecord).count() == 2
+
+
+def test_a_batch_past_the_bind_parameter_limit_is_stored(db: Session) -> None:
+    # A workout detail binds 22 parameters, so 3,000 in one INSERT would pass PostgreSQL's 65,535.
+    user = UserFactory()
+    db.commit()
+    points = [_exercise(f"w{i}", 0, "Fitbit Air") for i in range(3000)]
+    for i, point in enumerate(points):
+        start = START + timedelta(minutes=i)
+        point["exercise"]["interval"] |= {"startTime": start.isoformat(), "endTime": start.isoformat()}
+
+    assert _load(db, user.id, points) == 3000
